@@ -494,6 +494,14 @@ async function loadTeacherDashboard(user) {
 
     try {
 
+        console.log(
+            "ATTENDIX: Starting Firestore dashboard load..."
+        );
+
+        // ----------------------------------------------------
+        // LOAD FIRESTORE COLLECTIONS
+        // ----------------------------------------------------
+
         // ----------------------------------------------------
         // LOAD FIRESTORE COLLECTIONS
         // ----------------------------------------------------
@@ -1590,16 +1598,35 @@ async function loadAdminDashboard() {
             "ATTENDIX: Admin dashboard loaded successfully."
         );
 
+} catch (error) {
 
-    } catch (error) {
+    console.error(
+        "ATTENDIX: Dashboard Firestore error:",
+        error
+    );
 
-        console.error(
-            "ATTENDIX Admin Dashboard Error:",
-            error
+    console.error(
+        "Error code:",
+        error.code
+    );
+
+    console.error(
+        "Error message:",
+        error.message
+    );
+
+    // Stop loading messages
+    const loadingMessages =
+        document.querySelectorAll(
+            ".loading, [data-loading]"
         );
 
-    }
-
+    loadingMessages.forEach(
+        (element) => {
+            element.textContent =
+                "Unable to load data";
+        }
+    );
 }
 
 
