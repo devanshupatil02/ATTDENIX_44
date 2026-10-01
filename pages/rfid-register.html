@@ -1,0 +1,39 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RFID Registration - ATTENDIX</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body data-role="admin">
+
+  <main class="container">
+    <h1>RFID Card Registration</h1>
+    <p>Register an RFID card for a student.</p>
+
+    <form id="registrationForm">
+  <!-- Student dropdown -->
+
+  <button type="submit" id="startRegistrationBtn">
+    Start Registration
+  </button>
+</form>
+
+      <label for="studentSelect">Select Student</label>
+      <select id="studentSelect" required>
+        <option value="">Loading students...</option>
+      </select>
+
+      
+
+    </form>
+
+    <div id="registrationStatus"></div>
+
+  </main>
+
+  <script type="module" src="../js/rfid-register.js"></script>
+</body>
+</html>

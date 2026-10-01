@@ -1,3 +1,4 @@
+
 import {
   initializeApp,
   getApps,
@@ -20,25 +21,18 @@ import {
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
-
 // ============================================
-// FIREBASE CONFIG
+// FIREBASE CONFIGURATION
 // ============================================
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAxVUvIhjrBhmR_0uyXJyQmD00eQ9mgq9M",
+  apiKey: "YOUR_FIREBASE_API_KEY",
   authDomain: "attendix-rfid-attendance.firebaseapp.com",
   projectId: "attendix-rfid-attendance",
   storageBucket: "attendix-rfid-attendance.firebasestorage.app",
   messagingSenderId: "1038365817716",
-  appId: "1:1038365817716:web:a1160a5265dfb417da8a21",
-  measurementId: "G-ZYCH6VZHD0"
+  appId: "1:1038365817716:web:a1160a5265dfb417da8a21"
 };
-
-
-// ============================================
-// FIREBASE INITIALIZATION
-// ============================================
 
 const app = getApps().length
   ? getApp()
@@ -47,35 +41,20 @@ const app = getApps().length
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-
 // ============================================
-// ELEMENTS
+// DOM ELEMENTS
 // ============================================
 
-const timetableGrid =
-  document.getElementById("timetableGrid");
+const timetableGrid = document.getElementById("timetableGrid");
+const branchSelect = document.getElementById("branchSelect");
+const timetableStatus = document.getElementById("timetableStatus");
 
-const branchSelect =
-  document.getElementById("branchSelect");
+const totalClasses = document.getElementById("totalClasses");
+const todayClasses = document.getElementById("todayClasses");
+const totalSubjects = document.getElementById("totalSubjects");
+const teachersAssigned = document.getElementById("teachersAssigned");
 
-const timetableStatus =
-  document.getElementById("timetableStatus");
-
-const totalClasses =
-  document.getElementById("totalClasses");
-
-const todayClasses =
-  document.getElementById("todayClasses");
-
-const totalSubjects =
-  document.getElementById("totalSubjects");
-
-const teachersAssigned =
-  document.getElementById("teachersAssigned");
-
-const addClassBtn =
-  document.getElementById("addClassBtn");
-
+const addClassBtn = document.getElementById("addClassBtn");
 
 // ============================================
 // DATA
@@ -85,11 +64,6 @@ let timetableData = [];
 let subjectsMap = new Map();
 let teachersMap = new Map();
 let editingClassId = null;
-
-
-// ============================================
-// DAYS
-// ============================================
 
 const DAYS = [
   "Monday",
@@ -101,251 +75,189 @@ const DAYS = [
   "Sunday"
 ];
 
+const CLASS_OPTIONS = [
+  "First Year",
+  "Second Year",
+  "Third Year",
+  "Fourth Year"
+];
+
+const TIME_PATTERN =
+  /^(0[1-9]|1[0-2]):[0-5][0-9] (AM|PM)$/;
 
 // ============================================
 // STATUS
 // ============================================
 
 function showStatus(message, type = "") {
-
   if (!timetableStatus) return;
 
   timetableStatus.textContent = message;
-
   timetableStatus.className =
     `timetable-status ${type}`;
 }
 
+// ============================================
+// HTML SECURITY HELPERS
+// ============================================
+
+function escapeHTML(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function escapeAttribute(value) {
+  return escapeHTML(value);
+}
 
 // ============================================
-// LOAD ALL FIREBASE DATA
+// TIME HELPERS
+// ============================================
+
+function convertToMinutes(time) {
+  if (!time || !TIME_PATTERN.test(time)) {
+    return -1;
+  }
+
+  const [clock, period] = time.split(" ");
+  let [hours, minutes] = clock.split(":").map(Number);
+
+  if (period === "AM" && hours === 12) {
+    hours = 0;
+  }
+
+  if (period === "PM" && hours !== 12) {
+    hours += 12;
+  }
+
+  return hours * 60 + minutes;
+}
+
+function getCurrentMinutes() {
+  const currentTime = new Date().toLocaleTimeString(
+    "en-US",
+    {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: "Asia/Kolkata"
+    }
+  );
+
+  const [hours, minutes] = currentTime
+    .split(":")
+    .map(Number);
+
+  return hours * 60 + minutes;
+}
+
+function getTodayName() {
+  return new Date().toLocaleDateString(
+    "en-US",
+    {
+      weekday: "long",
+      timeZone: "Asia/Kolkata"
+    }
+  );
+}
+
+// ============================================
+// LOAD FIRESTORE DATA
 // ============================================
 
 async function loadTimetableData() {
-
   try {
-
     showStatus("Loading timetable...", "loading");
 
+    const timetableSnapshot = await getDocs(
+      collection(db, "timetable")
+    );
 
-    // ========================================
-    // LOAD TIMETABLE
-    // ========================================
+    timetableData = timetableSnapshot.docs
+      .map(item => {
+        const data = item.data();
 
-    const timetableSnapshot =
-      await getDocs(
-        collection(db, "timetable")
-      );
+        return {
+          id: item.id,
+          day: data.day || "",
+          startTime: data.startTime || "",
+          endTime: data.endTime || "",
+          branch: data.branch || "",
+          className: data.class || "",
+          room: data.room || "",
+          subjectID: data.subjectID || "",
+          teacherUid: data.teacherUid || "",
+          type: data.type || "Lecture",
+          active: data.active !== false
+        };
+      })
+      .filter(item => item.active);
 
-    timetableData =
-      timetableSnapshot.docs
-        .map((item) => {
-
-          const data = item.data();
-
-          return {
-
-            id: item.id,
-
-            day:
-              data.day || "",
-
-            startTime:
-              data.startTime || "",
-
-            endTime:
-              data.endTime || "",
-
-            branch:
-              data.branch || "",
-
-            room:
-              data.room || "",
-
-            subjectID:
-              data.subjectID || "",
-
-            teacherUid:
-              data.teacherUid || "",
-
-            type:
-              data.type || "Lecture",
-
-            active:
-              data.active !== false
-
-          };
-
-        })
-        .filter(
-          item => item.active !== false
-        );
-
-
-    // ========================================
-    // LOAD SUBJECTS
-    // ========================================
-
-    const subjectsSnapshot =
-      await getDocs(
-        collection(db, "subjects")
-      );
+    const subjectsSnapshot = await getDocs(
+      collection(db, "subjects")
+    );
 
     subjectsMap.clear();
 
-    subjectsSnapshot.forEach((item) => {
-
+    subjectsSnapshot.forEach(item => {
       const data = item.data();
 
-      // Ignore inactive subjects
-      if (data.active === false) {
-        return;
-      }
+      if (data.active === false) return;
 
-      subjectsMap.set(
-        item.id,
-        {
-          id: item.id,
-
-          name:
-            data.name ||
-            "Unnamed Subject",
-
-          code:
-            data.code ||
-            ""
-        }
-      );
-
+      subjectsMap.set(item.id, {
+        id: item.id,
+        name: data.name || "Unnamed Subject",
+        code: data.code || ""
+      });
     });
 
-
-    // ========================================
-    // LOAD TEACHERS
-    //
-    // IMPORTANT:
-    // Your actual teachers are stored in:
-    //
-    // teachers
-    //
-    // NOT users.
-    // ========================================
-
-    const teachersSnapshot =
-      await getDocs(
-        collection(db, "teachers")
-      );
+    const teachersSnapshot = await getDocs(
+      collection(db, "teachers")
+    );
 
     teachersMap.clear();
 
-    teachersSnapshot.forEach((item) => {
-
+    teachersSnapshot.forEach(item => {
       const data = item.data();
 
-      // Ignore inactive teachers
-      if (data.active === false) {
-        return;
-      }
+      if (data.active === false) return;
 
-      const teacherId = item.id;
-
-      teachersMap.set(
-        teacherId,
-        {
-          id: teacherId,
-
-          name:
-            data.name ||
-            "Unnamed Teacher",
-
-          email:
-            data.email ||
-            "",
-
-          department:
-            data.department ||
-            ""
-        }
-      );
-
+      teachersMap.set(item.id, {
+        id: item.id,
+        name: data.name || "Unnamed Teacher",
+        email: data.email || "",
+        department: data.department || ""
+      });
     });
 
-
-    // ========================================
-    // DEBUG
-    // ========================================
-
-    console.log(
-      "Subjects:",
-      [...subjectsMap.values()]
-    );
-
-    console.log(
-      "Teachers:",
-      [...teachersMap.values()]
-    );
-
-    console.log(
-      "Timetable:",
-      timetableData
-    );
-
-
-    // ========================================
-    // UPDATE PAGE
-    // ========================================
-
     populateBranches();
-
     updateStatistics();
-
     renderTimetable();
 
     showStatus("", "success");
 
-
   } catch (error) {
+    console.error("Error loading timetable:", error);
 
-    console.error(
-      "Error loading timetable:",
-      error
+    showStatus(
+      "Failed to load timetable data.",
+      "error"
     );
-
-
-    if (
-      error.code ===
-      "permission-denied"
-    ) {
-
-      showStatus(
-        "Permission denied. Check Firestore Rules.",
-        "error"
-      );
-
-    } else {
-
-      showStatus(
-        "Failed to load timetable data.",
-        "error"
-      );
-
-    }
-
   }
-
 }
-
 
 // ============================================
 // BRANCH FILTER
 // ============================================
 
 function populateBranches() {
-
   if (!branchSelect) return;
 
-  const currentValue =
-    branchSelect.value;
+  const currentValue = branchSelect.value;
 
   const branches = [
     ...new Set(
@@ -356,9 +268,7 @@ function populateBranches() {
   ].sort();
 
   branchSelect.innerHTML = `
-    <option value="">
-      All Branches
-    </option>
+    <option value="">All Branches</option>
 
     ${branches.map(branch => `
       <option value="${escapeAttribute(branch)}">
@@ -367,123 +277,65 @@ function populateBranches() {
     `).join("")}
   `;
 
-  if (
-    branches.includes(currentValue)
-  ) {
-
-    branchSelect.value =
-      currentValue;
-
+  if (branches.includes(currentValue)) {
+    branchSelect.value = currentValue;
   }
-
 }
-
-
-// ============================================
-// FILTERED DATA
-// ============================================
 
 function getFilteredData() {
+  const branch = branchSelect?.value || "";
 
-  const branch =
-    branchSelect?.value || "";
-
-  return timetableData.filter(
-    item =>
-      !branch ||
-      item.branch === branch
+  return timetableData.filter(item =>
+    !branch || item.branch === branch
   );
-
 }
-
 
 // ============================================
 // STATISTICS
 // ============================================
 
 function updateStatistics() {
+  const data = getFilteredData();
 
-  const data =
-    getFilteredData();
-
-
-  // Total classes
   if (totalClasses) {
-
-    totalClasses.textContent =
-      data.length;
-
+    totalClasses.textContent = data.length;
   }
 
-
-  // Subjects used in timetable
   if (totalSubjects) {
-
-    const subjectIds =
-      new Set(
-        data
-          .map(item => item.subjectID)
-          .filter(Boolean)
-      );
-
-    totalSubjects.textContent =
-      subjectIds.size;
-
+    totalSubjects.textContent = new Set(
+      data
+        .map(item => item.subjectID)
+        .filter(Boolean)
+    ).size;
   }
 
-
-  // Teachers assigned
   if (teachersAssigned) {
-
-    const teacherIds =
-      new Set(
-        data
-          .map(item => item.teacherUid)
-          .filter(Boolean)
-      );
-
-    teachersAssigned.textContent =
-      teacherIds.size;
-
+    teachersAssigned.textContent = new Set(
+      data
+        .map(item => item.teacherUid)
+        .filter(Boolean)
+    ).size;
   }
 
-
-  // Today's classes
   if (todayClasses) {
+    const today = getTodayName();
 
-    const today =
-      new Date().toLocaleDateString(
-        "en-US",
-        {
-          weekday: "long",
-          timeZone: "Asia/Kolkata"
-        }
-      );
-
-    todayClasses.textContent =
-      data.filter(
-        item => item.day === today
-      ).length;
-
+    todayClasses.textContent = data.filter(
+      item => item.day === today
+    ).length;
   }
-
 }
-
 
 // ============================================
 // RENDER TIMETABLE
 // ============================================
 
 function renderTimetable() {
-
   if (!timetableGrid) return;
 
-  const data =
-    getFilteredData();
-
+  const data = getFilteredData();
 
   if (!data.length) {
-
     timetableGrid.innerHTML = `
       <div class="empty-state">
         <h3>No classes found</h3>
@@ -492,190 +344,107 @@ function renderTimetable() {
     `;
 
     return;
-
   }
 
-
   const grouped = {};
-
 
   DAYS.forEach(day => {
     grouped[day] = [];
   });
 
-
   data.forEach(item => {
-
     if (!grouped[item.day]) {
       grouped[item.day] = [];
     }
 
     grouped[item.day].push(item);
-
   });
-
 
   timetableGrid.innerHTML = "";
 
-
   DAYS.forEach(day => {
-
-    const classes =
-      grouped[day];
+    const classes = grouped[day];
 
     if (!classes.length) return;
 
-
-    classes.sort(
-      (a, b) =>
-        (a.startTime || "")
-          .localeCompare(
-            b.startTime || ""
-          )
+    classes.sort((a, b) =>
+      (a.startTime || "")
+        .localeCompare(b.startTime || "")
     );
 
+    const section = document.createElement("section");
 
-    const daySection =
-      document.createElement(
-        "section"
-      );
+    section.className = "timetable-day";
 
-    daySection.className =
-      "timetable-day";
-
-
-    daySection.innerHTML = `
-
+    section.innerHTML = `
       <div class="day-heading">
-
-        <h3>
-          ${escapeHTML(day)}
-        </h3>
-
+        <h3>${escapeHTML(day)}</h3>
         <span>
           ${classes.length}
-          ${classes.length === 1
-            ? "class"
-            : "classes"}
+          class${classes.length === 1 ? "" : "es"}
         </span>
-
       </div>
-
 
       <div class="day-classes">
-
-        ${classes
-          .map(renderClass)
-          .join("")}
-
+        ${classes.map(renderClass).join("")}
       </div>
-
     `;
 
-
-    timetableGrid.appendChild(
-      daySection
-    );
-
+    timetableGrid.appendChild(section);
   });
 
-
   attachClassActions();
-
 }
-
 
 // ============================================
 // RENDER CLASS
 // ============================================
 
 function renderClass(item) {
-
-  const subject =
-    subjectsMap.get(
-      item.subjectID
-    );
-
-
-  const teacher =
-    teachersMap.get(
-      item.teacherUid
-    );
-
-
-  const subjectName =
-    subject?.name ||
-    "Unknown Subject";
-
-
-  const subjectCode =
-    subject?.code ||
-    "";
-
-
-  const teacherName =
-    teacher?.name ||
-    "Unassigned";
-
-
-  const status =
-    getClassStatus(item);
-
+  const subject = subjectsMap.get(item.subjectID);
+  const teacher = teachersMap.get(item.teacherUid);
+  const status = getClassStatus(item);
 
   return `
-
     <article
       class="class-card"
       data-class-id="${escapeAttribute(item.id)}"
     >
 
       <div class="class-time">
-
-        ${escapeHTML(
-          item.startTime || "--:--"
-        )}
-
+        ${escapeHTML(item.startTime || "--:--")}
         -
-
-        ${escapeHTML(
-          item.endTime || "--:--"
-        )}
-
+        ${escapeHTML(item.endTime || "--:--")}
       </div>
-
 
       <div class="class-details">
 
         <h4>
-          ${escapeHTML(subjectName)}
+          ${escapeHTML(
+            subject?.name || "Unknown Subject"
+          )}
         </h4>
-
-
-        ${
-          subjectCode
-            ? `
-              <span class="subject-code">
-                ${escapeHTML(subjectCode)}
-              </span>
-            `
-            : ""
-        }
-
 
         <p>
           <strong>Teacher:</strong>
-          ${escapeHTML(teacherName)}
+          ${escapeHTML(
+            teacher?.name || "Unassigned"
+          )}
         </p>
-
 
         <p>
           <strong>Branch:</strong>
           ${escapeHTML(
-            item.branch ||
-            "Not specified"
+            item.branch || "Not specified"
           )}
         </p>
 
+        <p>
+          <strong>Class:</strong>
+          ${escapeHTML(
+            item.className || "Not specified"
+          )}
+        </p>
 
         ${
           item.room
@@ -688,20 +457,12 @@ function renderClass(item) {
             : ""
         }
 
-
-        ${
-          item.type
-            ? `
-              <p>
-                <strong>Type:</strong>
-                ${escapeHTML(item.type)}
-              </p>
-            `
-            : ""
-        }
+        <p>
+          <strong>Type:</strong>
+          ${escapeHTML(item.type)}
+        </p>
 
       </div>
-
 
       <div class="class-footer">
 
@@ -713,18 +474,18 @@ function renderClass(item) {
           ${escapeHTML(status)}
         </span>
 
-
         <div class="class-actions">
 
           <button
+            type="button"
             class="edit-class-btn"
             data-id="${escapeAttribute(item.id)}"
           >
             Edit
           </button>
 
-
           <button
+            type="button"
             class="delete-class-btn"
             data-id="${escapeAttribute(item.id)}"
           >
@@ -732,195 +493,106 @@ function renderClass(item) {
           </button>
 
         </div>
-
       </div>
 
     </article>
-
   `;
-
 }
-
 
 // ============================================
 // CLASS STATUS
 // ============================================
 
 function getClassStatus(item) {
-
-  if (
-    !item.startTime ||
-    !item.endTime
-  ) {
-
+  if (!item.startTime || !item.endTime) {
     return "Upcoming";
-
   }
 
+  if (
+    !TIME_PATTERN.test(item.startTime) ||
+    !TIME_PATTERN.test(item.endTime)
+  ) {
+    return "Upcoming";
+  }
 
-  const now =
-    new Date();
-
-
-  const today =
-    now.toLocaleDateString(
-      "en-US",
-      {
-        weekday: "long",
-        timeZone: "Asia/Kolkata"
-      }
-    );
-
+  const today = getTodayName();
 
   if (item.day !== today) {
     return "Upcoming";
   }
 
-
-  const currentTime =
-    now.toLocaleTimeString(
-      "en-GB",
-      {
-        hour: "2-digit",
-        minute: "2-digit",
-        timeZone: "Asia/Kolkata"
-      }
-    );
-
-
-  if (
-    currentTime <
+  const currentMinutes = getCurrentMinutes();
+  const startMinutes = convertToMinutes(
     item.startTime
-  ) {
+  );
+  const endMinutes = convertToMinutes(
+    item.endTime
+  );
 
+  if (currentMinutes < startMinutes) {
     return "Upcoming";
-
   }
-
 
   if (
-    currentTime >= item.startTime &&
-    currentTime <= item.endTime
+    currentMinutes >= startMinutes &&
+    currentMinutes <= endMinutes
   ) {
-
     return "Ongoing";
-
   }
-
 
   return "Completed";
-
 }
-
 
 // ============================================
 // EDIT / DELETE ACTIONS
 // ============================================
 
 function attachClassActions() {
-
   document
-    .querySelectorAll(
-      ".edit-class-btn"
-    )
+    .querySelectorAll(".edit-class-btn")
     .forEach(button => {
-
-      button.addEventListener(
-        "click",
-        () => {
-
-          openClassModal(
-            button.dataset.id
-          );
-
-        }
-      );
-
+      button.addEventListener("click", () => {
+        openClassModal(button.dataset.id);
+      });
     });
 
-
   document
-    .querySelectorAll(
-      ".delete-class-btn"
-    )
+    .querySelectorAll(".delete-class-btn")
     .forEach(button => {
-
-      button.addEventListener(
-        "click",
-        () => {
-
-          deleteClass(
-            button.dataset.id
-          );
-
-        }
-      );
-
+      button.addEventListener("click", () => {
+        deleteClass(button.dataset.id);
+      });
     });
-
 }
-
 
 // ============================================
 // ADD / EDIT MODAL
 // ============================================
 
-function openClassModal(
-  classId = null
-) {
+function openClassModal(classId = null) {
+  editingClassId = classId;
 
-  editingClassId =
-    classId;
+  const existingClass = classId
+    ? timetableData.find(item => item.id === classId)
+    : null;
 
+  document
+    .getElementById("classModal")
+    ?.remove();
 
-  const existingClass =
-    classId
-      ? timetableData.find(
-          item =>
-            item.id === classId
-        )
-      : null;
+  const modal = document.createElement("div");
 
-
-  // Remove old modal if exists
-  const oldModal =
-    document.getElementById(
-      "classModal"
-    );
-
-  if (oldModal) {
-    oldModal.remove();
-  }
-
-
-  const modal =
-    document.createElement(
-      "div"
-    );
-
-
-  modal.className =
-    "class-modal-overlay";
-
-
-  modal.id =
-    "classModal";
-
+  modal.className = "class-modal-overlay";
+  modal.id = "classModal";
 
   modal.innerHTML = `
-
     <div class="class-modal">
 
       <div class="modal-header">
 
         <h2>
-          ${
-            existingClass
-              ? "Edit Class"
-              : "Add Class"
-          }
+          ${existingClass ? "Edit Class" : "Add Class"}
         </h2>
-
 
         <button
           type="button"
@@ -931,27 +603,15 @@ function openClassModal(
 
       </div>
 
-
       <form id="classForm">
 
-
-        <!-- DAY -->
-
         <label>
-
           Day
 
-          <select
-            id="classDay"
-            required
-          >
-
-            <option value="">
-              Select Day
-            </option>
+          <select id="classDay" required>
+            <option value="">Select Day</option>
 
             ${DAYS.map(day => `
-
               <option
                 value="${escapeAttribute(day)}"
                 ${
@@ -962,54 +622,42 @@ function openClassModal(
               >
                 ${escapeHTML(day)}
               </option>
-
             `).join("")}
 
           </select>
-
         </label>
 
-
-        <!-- START TIME -->
-
         <label>
-
           Start Time
 
           <input
-            type="time"
-            id="classStartTime"
+            type="text"
+            id="startTime"
             value="${escapeAttribute(
               existingClass?.startTime || ""
             )}"
+            placeholder="09:00 AM"
+            pattern="^(0[1-9]|1[0-2]):[0-5][0-9] (AM|PM)$"
             required
           >
-
         </label>
 
-
-        <!-- END TIME -->
-
         <label>
-
           End Time
 
           <input
-            type="time"
-            id="classEndTime"
+            type="text"
+            id="endTime"
             value="${escapeAttribute(
               existingClass?.endTime || ""
             )}"
+            placeholder="10:00 AM"
+            pattern="^(0[1-9]|1[0-2]):[0-5][0-9] (AM|PM)$"
             required
           >
-
         </label>
 
-
-        <!-- BRANCH -->
-
         <label>
-
           Branch
 
           <input
@@ -1021,114 +669,84 @@ function openClassModal(
             placeholder="AI and Data Science"
             required
           >
-
         </label>
 
+        <label>
+          Class
 
-        <!-- SUBJECT -->
+          <select id="className" required>
+            <option value="">Select Class</option>
+
+            ${CLASS_OPTIONS.map(className => `
+              <option
+                value="${escapeAttribute(className)}"
+                ${
+                  existingClass?.className === className
+                    ? "selected"
+                    : ""
+                }
+              >
+                ${escapeHTML(className)}
+              </option>
+            `).join("")}
+
+          </select>
+        </label>
 
         <label>
-
           Subject
 
-          <select
-            id="classSubject"
-            required
-          >
+          <select id="classSubject" required>
+            <option value="">Select Subject</option>
 
-            <option value="">
-              Select Subject
-            </option>
-
-            ${
-              [...subjectsMap.values()]
-                .map(subject => `
-
-                  <option
-                    value="${escapeAttribute(
-                      subject.id
-                    )}"
-                    ${
-                      existingClass?.subjectID ===
-                      subject.id
-                        ? "selected"
-                        : ""
-                    }
-                  >
-
-                    ${escapeHTML(
-                      subject.name
-                    )}
-
-                    ${
-                      subject.code
-                        ? `(${escapeHTML(
-                            subject.code
-                          )})`
-                        : ""
-                    }
-
-                  </option>
-
-                `)
-                .join("")
-            }
+            ${[
+              ...subjectsMap.values()
+            ].map(subject => `
+              <option
+                value="${escapeAttribute(subject.id)}"
+                ${
+                  existingClass?.subjectID === subject.id
+                    ? "selected"
+                    : ""
+                }
+              >
+                ${escapeHTML(subject.name)}
+                ${
+                  subject.code
+                    ? `(${escapeHTML(subject.code)})`
+                    : ""
+                }
+              </option>
+            `).join("")}
 
           </select>
-
         </label>
 
-
-        <!-- TEACHER -->
-
         <label>
-
           Teacher
 
-          <select
-            id="classTeacher"
-            required
-          >
+          <select id="classTeacher" required>
+            <option value="">Select Teacher</option>
 
-            <option value="">
-              Select Teacher
-            </option>
-
-            ${
-              [...teachersMap.values()]
-                .map(teacher => `
-
-                  <option
-                    value="${escapeAttribute(
-                      teacher.id
-                    )}"
-                    ${
-                      existingClass?.teacherUid ===
-                      teacher.id
-                        ? "selected"
-                        : ""
-                    }
-                  >
-
-                    ${escapeHTML(
-                      teacher.name
-                    )}
-
-                  </option>
-
-                `)
-                .join("")
-            }
+            ${[
+              ...teachersMap.values()
+            ].map(teacher => `
+              <option
+                value="${escapeAttribute(teacher.id)}"
+                ${
+                  existingClass?.teacherUid === teacher.id
+                    ? "selected"
+                    : ""
+                }
+              >
+                ${escapeHTML(teacher.name)}
+              </option>
+            `).join("")}
 
           </select>
-
         </label>
 
-
-        <!-- ROOM -->
-
         <label>
-
           Room
 
           <input
@@ -1139,57 +757,38 @@ function openClassModal(
             )}"
             placeholder="418"
           >
-
         </label>
-
-
-        <!-- CLASS TYPE -->
 
         <label>
-
           Class Type
 
-          <select
-            id="classType"
-          >
+          <select id="classType">
 
-            ${
-              [
-                "Lecture",
-                "Lab",
-                "Tutorial",
-                "Practical"
-              ]
-                .map(type => `
-
-                  <option
-                    value="${escapeAttribute(type)}"
-                    ${
-                      (
-                        existingClass?.type ||
-                        "Lecture"
-                      ) === type
-                        ? "selected"
-                        : ""
-                    }
-                  >
-                    ${escapeHTML(type)}
-                  </option>
-
-                `)
-                .join("")
-            }
+            ${[
+              "Lecture",
+              "Lab",
+              "Tutorial",
+              "Practical"
+            ].map(type => `
+              <option
+                value="${escapeAttribute(type)}"
+                ${
+                  (existingClass?.type || "Lecture") === type
+                    ? "selected"
+                    : ""
+                }
+              >
+                ${escapeHTML(type)}
+              </option>
+            `).join("")}
 
           </select>
-
         </label>
-
 
         <p
           id="classFormError"
           class="form-error"
         ></p>
-
 
         <div class="modal-actions">
 
@@ -1200,10 +799,7 @@ function openClassModal(
             Cancel
           </button>
 
-
-          <button
-            type="submit"
-          >
+          <button type="submit">
             ${
               existingClass
                 ? "Update Class"
@@ -1213,443 +809,269 @@ function openClassModal(
 
         </div>
 
-
       </form>
 
     </div>
-
   `;
 
+  document.body.appendChild(modal);
 
-  document.body.appendChild(
-    modal
-  );
-
-
-  // Close button
   document
-    .getElementById(
-      "closeClassModal"
-    )
-    .addEventListener(
-      "click",
-      closeClassModal
-    );
+    .getElementById("closeClassModal")
+    .addEventListener("click", closeClassModal);
 
-
-  // Cancel button
   document
-    .getElementById(
-      "cancelClassBtn"
-    )
-    .addEventListener(
-      "click",
-      closeClassModal
-    );
+    .getElementById("cancelClassBtn")
+    .addEventListener("click", closeClassModal);
 
-
-  // Form submit
   document
-    .getElementById(
-      "classForm"
-    )
-    .addEventListener(
-      "submit",
-      saveClass
-    );
-
+    .getElementById("classForm")
+    .addEventListener("submit", saveClass);
 }
-
 
 // ============================================
 // CLOSE MODAL
 // ============================================
 
 function closeClassModal() {
+  document
+    .getElementById("classModal")
+    ?.remove();
 
-  const modal =
-    document.getElementById(
-      "classModal"
-    );
-
-
-  if (modal) {
-    modal.remove();
-  }
-
-
-  editingClassId =
-    null;
-
+  editingClassId = null;
 }
-
 
 // ============================================
 // SAVE CLASS
 // ============================================
 
 async function saveClass(event) {
-
   event.preventDefault();
 
-
   const errorElement =
-    document.getElementById(
-      "classFormError"
-    );
+    document.getElementById("classFormError");
 
+  const dayElement =
+    document.getElementById("classDay");
 
-  const day =
-    document.getElementById(
-      "classDay"
-    ).value;
+  const startTimeElement =
+    document.getElementById("startTime");
 
+  const endTimeElement =
+    document.getElementById("endTime");
 
-  const startTime =
-    document.getElementById(
-      "classStartTime"
-    ).value;
+  const branchElement =
+    document.getElementById("classBranch");
 
+  const classNameElement =
+    document.getElementById("className");
 
-  const endTime =
-    document.getElementById(
-      "classEndTime"
-    ).value;
+  const subjectElement =
+    document.getElementById("classSubject");
 
+  const teacherElement =
+    document.getElementById("classTeacher");
 
-  const branch =
-    document.getElementById(
-      "classBranch"
-    ).value.trim();
+  const roomElement =
+    document.getElementById("classRoom");
 
+  const typeElement =
+    document.getElementById("classType");
 
-  const subjectID =
-    document.getElementById(
-      "classSubject"
-    ).value;
+  const elements = {
+    classDay: dayElement,
+    startTime: startTimeElement,
+    endTime: endTimeElement,
+    classBranch: branchElement,
+    className: classNameElement,
+    classSubject: subjectElement,
+    classTeacher: teacherElement,
+    classRoom: roomElement,
+    classType: typeElement
+  };
 
+  // Check missing elements
+  for (const [id, element] of Object.entries(elements)) {
+    if (!element) {
+      console.error(`Missing form element: #${id}`);
 
-  const teacherUid =
-    document.getElementById(
-      "classTeacher"
-    ).value;
+      if (errorElement) {
+        errorElement.textContent =
+          `Form error: Missing element #${id}`;
+      }
 
+      return;
+    }
+  }
 
-  const room =
-    document.getElementById(
-      "classRoom"
-    ).value.trim();
+  const day = dayElement.value;
+  const startTime = startTimeElement.value
+    .trim()
+    .toUpperCase();
 
+  const endTime = endTimeElement.value
+    .trim()
+    .toUpperCase();
 
-  const type =
-    document.getElementById(
-      "classType"
-    ).value;
+  const branch = branchElement.value.trim();
+  const className = classNameElement.value;
+  const subjectID = subjectElement.value;
+  const teacherUid = teacherElement.value;
+  const room = roomElement.value.trim();
+  const type = typeElement.value;
 
-
-  // ========================================
-  // VALIDATION
-  // ========================================
-
+  // Required field validation
   if (
     !day ||
     !startTime ||
     !endTime ||
     !branch ||
+    !className ||
     !subjectID ||
     !teacherUid
   ) {
-
     errorElement.textContent =
       "Please fill in all required fields.";
 
     return;
-
   }
 
-
+  // AM/PM validation
   if (
-    startTime >= endTime
+    !TIME_PATTERN.test(startTime) ||
+    !TIME_PATTERN.test(endTime)
   ) {
+    errorElement.textContent =
+      "Use format like 09:00 AM or 02:30 PM.";
 
+    return;
+  }
+
+  const startMinutes =
+    convertToMinutes(startTime);
+
+  const endMinutes =
+    convertToMinutes(endTime);
+
+  if (startMinutes >= endMinutes) {
     errorElement.textContent =
       "End time must be after start time.";
 
     return;
-
   }
 
-
-  // ========================================
-  // FIRESTORE DATA
-  // ========================================
-
+  // Firestore data
   const classData = {
-
     day,
-
     startTime,
-
     endTime,
-
     branch,
-
+    class: className,
     subjectID,
-
     teacherUid,
-
     room,
-
     type,
-
     active: true,
-
-    updatedAt:
-      serverTimestamp()
-
+    updatedAt: serverTimestamp()
   };
 
-
   try {
-
-    // ======================================
-    // UPDATE EXISTING CLASS
-    // ======================================
-
     if (editingClassId) {
-
       await updateDoc(
-
-        doc(
-          db,
-          "timetable",
-          editingClassId
-        ),
-
+        doc(db, "timetable", editingClassId),
         classData
-
       );
-
-    }
-
-    // ======================================
-    // ADD NEW CLASS
-    // ======================================
-
-    else {
-
+    } else {
       await addDoc(
-
-        collection(
-          db,
-          "timetable"
-        ),
-
+        collection(db, "timetable"),
         {
           ...classData,
-
-          createdAt:
-            serverTimestamp()
-
+          createdAt: serverTimestamp()
         }
-
       );
-
     }
-
 
     closeClassModal();
 
-
     await loadTimetableData();
 
-
   } catch (error) {
+    console.error("Error saving class:", error);
 
-    console.error(
-      "Error saving class:",
-      error
-    );
-
-
-    if (
-      error.code ===
-      "permission-denied"
-    ) {
-
-      errorElement.textContent =
-        "Permission denied. Check Firestore Rules.";
-
-    } else {
-
-      errorElement.textContent =
-        "Failed to save class. Try again.";
-
-    }
-
+    errorElement.textContent =
+      error.code === "permission-denied"
+        ? "Permission denied. Check Firestore Rules."
+        : "Failed to save class. Try again.";
   }
-
 }
-
 
 // ============================================
 // DELETE CLASS
 // ============================================
 
-async function deleteClass(
-  classId
-) {
-
-  const confirmed =
-    confirm(
-      "Are you sure you want to delete this class?"
-    );
-
+async function deleteClass(classId) {
+  const confirmed = confirm(
+    "Are you sure you want to delete this class?"
+  );
 
   if (!confirmed) return;
 
-
   try {
-
     await deleteDoc(
-      doc(
-        db,
-        "timetable",
-        classId
-      )
+      doc(db, "timetable", classId)
     );
-
 
     await loadTimetableData();
 
-
   } catch (error) {
+    console.error("Error deleting class:", error);
 
-    console.error(
-      "Error deleting class:",
-      error
-    );
-
-
-    alert(
-      "Failed to delete class."
-    );
-
+    alert("Failed to delete class.");
   }
-
 }
 
-
 // ============================================
-// ADD CLASS BUTTON
-// ============================================
-
-if (addClassBtn) {
-
-  addClassBtn.addEventListener(
-    "click",
-    () => {
-
-      openClassModal();
-
-    }
-  );
-
-}
-
-
-// ============================================
-// BRANCH FILTER
+// BUTTON EVENTS
 // ============================================
 
-if (branchSelect) {
+addClassBtn?.addEventListener("click", () => {
+  openClassModal();
+});
 
-  branchSelect.addEventListener(
-    "change",
-    () => {
-
-      updateStatistics();
-
-      renderTimetable();
-
-    }
-  );
-
-}
-
-
-// ============================================
-// ESCAPE HTML
-// ============================================
-
-function escapeHTML(value) {
-
-  return String(value ?? "")
-    .replaceAll(
-      "&",
-      "&amp;"
-    )
-    .replaceAll(
-      "<",
-      "&lt;"
-    )
-    .replaceAll(
-      ">",
-      "&gt;"
-    )
-    .replaceAll(
-      '"',
-      "&quot;"
-    )
-    .replaceAll(
-      "'",
-      "&#039;"
-    );
-
-}
-
-
-function escapeAttribute(value) {
-
-  return escapeHTML(value);
-
-}
-
+branchSelect?.addEventListener("change", () => {
+  updateStatistics();
+  renderTimetable();
+});
 
 // ============================================
 // AUTHENTICATION
 // ============================================
 
-onAuthStateChanged(
-  auth,
-  (user) => {
+onAuthStateChanged(auth, user => {
+  if (user) {
+    console.log(
+      "Authenticated user:",
+      user.uid
+    );
 
-    if (user) {
-
-      console.log(
-        "Authenticated user:",
-        user.uid
-      );
-
-      loadTimetableData();
-
-    } else {
-
-      console.error(
-        "No authenticated user found."
-      );
-
-      showStatus(
-        "Please log in first.",
-        "error"
-      );
-
-
-      if (addClassBtn) {
-        addClassBtn.disabled = true;
-      }
-
+    if (addClassBtn) {
+      addClassBtn.disabled = false;
     }
 
+    loadTimetableData();
+
+  } else {
+    console.error(
+      "No authenticated user found."
+    );
+
+    showStatus(
+      "Please log in first.",
+      "error"
+    );
+
+    if (addClassBtn) {
+      addClassBtn.disabled = true;
+    }
   }
-);
+});
