@@ -973,6 +973,634 @@ async function loadTeacherDashboard(user) {
             myStudentsCount.textContent =
                 myStudents.length;
         }
+        // ============================================================
+// ADMIN DASHBOARD
+// ============================================================
+
+async function loadAdminDashboard() {
+
+    console.log("ATTENDIX: Loading admin dashboard...");
+
+    try {
+
+        const [
+            studentsSnapshot,
+            usersSnapshot,
+            attendanceSnapshot,
+            timetableSnapshot,
+            subjectsSnapshot
+        ] = await Promise.all([
+
+            getDocs(
+                collection(db, "students")
+            ),
+
+            getDocs(
+                collection(db, "users")
+            ),
+
+            getDocs(
+                collection(db, "attendance")
+            ),
+
+            getDocs(
+                collection(db, "timetable")
+            ),
+
+            getDocs(
+                collection(db, "subjects")
+            )
+        ]);
+
+
+        // ----------------------------------------------------
+        // STUDENTS
+        // ----------------------------------------------------
+
+        const students =
+            studentsSnapshot.docs
+                .map(item => ({
+                    id: item.id,
+                    ...item.data()
+                }))
+                .filter(
+                    student =>
+                        student.active !== false
+                );
+
+
+        // ----------------------------------------------------
+        // TEACHERS
+        // ----------------------------------------------------
+
+        const teachers =
+            usersSnapshot.docs
+                .map(item => ({
+                    id: item.id,
+                    ...item.data()
+                }))
+                .filter(
+                    user =>
+                        String(
+                            user.role || ""
+                        )
+                            .trim()
+                            .toLowerCase() === "teacher"
+                );
+
+
+        // ----------------------------------------------------
+        // ATTENDANCE
+        // ----------------------------------------------------
+
+        const attendance =
+            attendanceSnapshot.docs
+                .map(item => ({
+                    id: item.id,
+                    ...item.data()
+                }));
+
+
+        // ----------------------------------------------------
+        // TIMETABLE
+        // ----------------------------------------------------
+
+        const timetable =
+            timetableSnapshot.docs
+                .map(item => ({
+                    id: item.id,
+                    ...item.data()
+                }));
+
+
+        // ----------------------------------------------------
+        // SUBJECTS
+        // ----------------------------------------------------
+
+        const subjects =
+            new Map();
+
+        subjectsSnapshot.docs.forEach(item => {
+
+            subjects.set(
+                item.id,
+                {
+                    id: item.id,
+                    ...item.data()
+                }
+            );
+
+        });
+
+
+        console.log(
+            "Admin students:",
+            students
+        );
+
+        console.log(
+            "Admin teachers:",
+            teachers
+        );
+
+        console.log(
+            "Admin attendance:",
+            attendance
+        );
+
+
+        // ====================================================
+        // TOTAL STUDENTS
+        // ====================================================
+
+        const totalStudents =
+            document.getElementById(
+                "totalStudents"
+            );
+
+        if (totalStudents) {
+
+            totalStudents.textContent =
+                students.length;
+
+        }
+
+
+        // ====================================================
+        // TOTAL TEACHERS
+        // ====================================================
+
+        const totalTeachers =
+            document.getElementById(
+                "totalTeachers"
+            );
+
+        if (totalTeachers) {
+
+            totalTeachers.textContent =
+                teachers.length;
+
+        }
+
+
+        // ====================================================
+        // TODAY
+        // ====================================================
+
+        const today =
+            formatDate(
+                new Date()
+            );
+
+
+        // ====================================================
+        // TODAY ATTENDANCE
+        // ====================================================
+
+        const todayAttendance =
+            attendance.filter(
+                record =>
+                    record.date === today
+            );
+
+
+        // ----------------------------------------------------
+        // UNIQUE STUDENTS
+        // Prevent duplicate attendance count
+        // ----------------------------------------------------
+
+        const presentStudentIds =
+            new Set();
+
+        todayAttendance.forEach(
+            record => {
+
+                if (record.student_id) {
+
+                    presentStudentIds.add(
+                        record.student_id
+                    );
+
+                }
+
+            }
+        );
+
+
+        const presentCount =
+            presentStudentIds.size;
+
+
+        // ====================================================
+        // PRESENT TODAY
+        // ====================================================
+
+        const presentToday =
+            document.getElementById(
+                "presentToday"
+            );
+
+        if (presentToday) {
+
+            presentToday.textContent =
+                presentCount;
+
+        }
+
+
+        // ====================================================
+        // PRESENT SUBTEXT
+        // ====================================================
+
+        const presentSubtext =
+            document.getElementById(
+                "presentSubtext"
+            );
+
+        if (presentSubtext) {
+
+            presentSubtext.textContent =
+                `${todayAttendance.length} attendance scan${
+                    todayAttendance.length === 1
+                        ? ""
+                        : "s"
+                } today`;
+
+        }
+
+
+        // ====================================================
+        // ATTENDANCE RATE
+        // ====================================================
+
+        const attendanceRate =
+            document.getElementById(
+                "attendanceRate"
+            );
+
+        const rate =
+            students.length > 0
+                ? (
+                    presentCount /
+                    students.length
+                ) * 100
+                : 0;
+
+        if (attendanceRate) {
+
+            attendanceRate.textContent =
+                `${rate.toFixed(1)}%`;
+
+        }
+
+
+        // ====================================================
+        // TODAY'S TIMETABLE
+        // ====================================================
+
+        const todayName =
+            getTodayName();
+
+        const todayClasses =
+            timetable
+                .filter(
+                    item => {
+
+                        return (
+                            normalize(
+                                item.day
+                            ) ===
+                            normalize(
+                                todayName
+                            ) &&
+                            item.active !== false
+                        );
+
+                    }
+                )
+                .sort(
+                    (a, b) =>
+                        String(
+                            a.startTime || ""
+                        ).localeCompare(
+                            String(
+                                b.startTime || ""
+                            )
+                        )
+                );
+
+
+        // ====================================================
+        // RENDER TODAY'S CLASSES
+        // ====================================================
+
+        const todayTable =
+            document.getElementById(
+                "todayClassesTable"
+            );
+
+        if (todayTable) {
+
+            if (!todayClasses.length) {
+
+                todayTable.innerHTML = `
+                    <tr>
+                        <td
+                            colspan="7"
+                            style="
+                                text-align:center;
+                                padding:24px;
+                            "
+                        >
+                            No classes scheduled for today.
+                        </td>
+                    </tr>
+                `;
+
+            } else {
+
+                todayTable.innerHTML =
+                    todayClasses
+                        .map(item => {
+
+                            const subject =
+                                subjects.get(
+                                    item.subjectID
+                                );
+
+                            const subjectName =
+                                subject?.name ||
+                                item.subjectID ||
+                                "Unknown Subject";
+
+
+                            const teacher =
+                                teachers.find(
+                                    person =>
+                                        person.uid ===
+                                            item.teacherUid ||
+                                        person.id ===
+                                            item.teacherUid ||
+                                        person.uid ===
+                                            item.teacher_uid ||
+                                        person.id ===
+                                            item.teacher_uid
+                                );
+
+
+                            const teacherName =
+                                teacher?.name ||
+                                teacher?.displayName ||
+                                "—";
+
+
+                            return `
+                                <tr>
+
+                                    <td>
+                                        ${escapeHTML(
+                                            formatTime(
+                                                item.startTime
+                                            )
+                                        )}
+                                        -
+                                        ${escapeHTML(
+                                            formatTime(
+                                                item.endTime
+                                            )
+                                        )}
+                                    </td>
+
+                                    <td>
+                                        <strong>
+                                            ${escapeHTML(
+                                                subjectName
+                                            )}
+                                        </strong>
+                                    </td>
+
+                                    <td>
+                                        ${escapeHTML(
+                                            teacherName
+                                        )}
+                                    </td>
+
+                                    <td>
+                                        ${escapeHTML(
+                                            item.branch ||
+                                            "—"
+                                        )}
+                                    </td>
+
+                                    <td>
+                                        ${escapeHTML(
+                                            item.room ||
+                                            "—"
+                                        )}
+                                    </td>
+
+                                    <td>
+                                        ${escapeHTML(
+                                            item.type ||
+                                            "Lecture"
+                                        )}
+                                    </td>
+
+                                    <td>
+                                        <span class="status-badge">
+                                            Scheduled
+                                        </span>
+                                    </td>
+
+                                </tr>
+                            `;
+
+                        })
+                        .join("");
+
+            }
+
+        }
+
+
+        // ====================================================
+        // BRANCH ATTENDANCE SUMMARY
+        // ====================================================
+
+        const branchTable =
+            document.getElementById(
+                "branchAttendanceTable"
+            );
+
+        if (branchTable) {
+
+            const groups =
+                new Map();
+
+
+            students.forEach(
+                student => {
+
+                    const branch =
+                        student.branch ||
+                        student.department ||
+                        "Unknown";
+
+                    const year =
+                        student.year ||
+                        student.class ||
+                        "—";
+
+
+                    const key =
+                        `${branch}|||${year}`;
+
+
+                    if (!groups.has(key)) {
+
+                        groups.set(
+                            key,
+                            {
+                                branch,
+                                year,
+                                students: []
+                            }
+                        );
+
+                    }
+
+
+                    groups
+                        .get(key)
+                        .students
+                        .push(student);
+
+                }
+            );
+
+
+            if (!groups.size) {
+
+                branchTable.innerHTML = `
+                    <tr>
+                        <td
+                            colspan="7"
+                            style="
+                                text-align:center;
+                                padding:24px;
+                            "
+                        >
+                            No student data available.
+                        </td>
+                    </tr>
+                `;
+
+            } else {
+
+                branchTable.innerHTML =
+                    Array.from(
+                        groups.values()
+                    )
+                    .map(group => {
+
+                        const total =
+                            group.students.length;
+
+
+                        const present =
+                            group.students.filter(
+                                student =>
+                                    presentStudentIds.has(
+                                        student.id
+                                    )
+                            ).length;
+
+
+                        const absent =
+                            Math.max(
+                                total - present,
+                                0
+                            );
+
+
+                        const percentage =
+                            total > 0
+                                ? (
+                                    present /
+                                    total
+                                ) * 100
+                                : 0;
+
+
+                        return `
+                            <tr>
+
+                                <td>
+                                    ${escapeHTML(
+                                        group.branch
+                                    )}
+                                </td>
+
+                                <td>
+                                    ${escapeHTML(
+                                        group.year
+                                    )}
+                                </td>
+
+                                <td>
+                                    ${total}
+                                </td>
+
+                                <td>
+                                    ${present}
+                                </td>
+
+                                <td>
+                                    ${absent}
+                                </td>
+
+                                <td>
+                                    ${percentage.toFixed(1)}%
+                                </td>
+
+                                <td>
+
+                                    <span class="status-badge">
+                                        ${
+                                            percentage >= 75
+                                                ? "Good"
+                                                : "Low"
+                                        }
+                                    </span>
+
+                                </td>
+
+                            </tr>
+                        `;
+
+                    })
+                    .join("");
+
+            }
+
+        }
+
+
+        console.log(
+            "ATTENDIX: Admin dashboard loaded successfully."
+        );
+
+
+    } catch (error) {
+
+        console.error(
+            "ATTENDIX Admin Dashboard Error:",
+            error
+        );
+
+    }
+
+}
 
 
         // ====================================================
